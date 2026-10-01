@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: facultymap
+      POSTGRES_USER: facultymap
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facultymap -d facultymap"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: flyway/flyway:11-alpine
+    command: -connectRetries=30 migrate
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/sql:ro
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/facultymap
+      FLYWAY_USER: facultymap
+      FLYWAY_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: faculty-map:local
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/facultymap
+      DB_USER: facultymap
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ADMIN_SIGNING_KEY: ${ADMIN_SIGNING_KEY:?set ADMIN_SIGNING_KEY in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
