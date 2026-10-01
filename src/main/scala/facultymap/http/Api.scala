@@ -1,6 +1,7 @@
 package facultymap.http
 
-import facultymap.application.{AdminAuth, MapService}
+import facultymap.application.AdminAuth
+import facultymap.application.MapService
 import facultymap.domain.*
 import io.scalaland.chimney.dsl.*
 import sttp.model.StatusCode
@@ -11,24 +12,32 @@ import zio.*
 import zio.json.*
 
 final case class FloorDto(id: Long, label: String, width: Int, height: Int)
-object FloorDto { given JsonCodec[FloorDto] = DeriveJsonCodec.gen[FloorDto] }
+object FloorDto:
+  given JsonCodec[FloorDto] = DeriveJsonCodec.gen[FloorDto]
 
 final case class RoomDto(id: Long, floorId: Long, number: String, name: String,
   description: String, x: Int, y: Int, width: Int, height: Int, status: String, version: Int)
-object RoomDto { given JsonCodec[RoomDto] = DeriveJsonCodec.gen[RoomDto] }
+object RoomDto:
+  given JsonCodec[RoomDto] = DeriveJsonCodec.gen[RoomDto]
 
 final case class RoomInput(floorId: Long, number: String, name: String,
   description: String, x: Int, y: Int, width: Int, height: Int)
-object RoomInput { given JsonCodec[RoomInput] = DeriveJsonCodec.gen[RoomInput] }
+object RoomInput:
+  given JsonCodec[RoomInput] = DeriveJsonCodec.gen[RoomInput]
 
 final case class LoginInput(username: String, password: String)
-object LoginInput { given JsonCodec[LoginInput] = DeriveJsonCodec.gen[LoginInput] }
-final case class TokenDto(token: String, expiresAtEpochSeconds: Long)
-object TokenDto { given JsonCodec[TokenDto] = DeriveJsonCodec.gen[TokenDto] }
-final case class ApiError(code: String, message: String)
-object ApiError { given JsonCodec[ApiError] = DeriveJsonCodec.gen[ApiError] }
+object LoginInput:
+  given JsonCodec[LoginInput] = DeriveJsonCodec.gen[LoginInput]
 
-final class Api(service: MapService, auth: AdminAuth) {
+final case class TokenDto(token: String, expiresAtEpochSeconds: Long)
+object TokenDto:
+  given JsonCodec[TokenDto] = DeriveJsonCodec.gen[TokenDto]
+
+final case class ApiError(code: String, message: String)
+object ApiError:
+  given JsonCodec[ApiError] = DeriveJsonCodec.gen[ApiError]
+
+final class Api(service: MapService, auth: AdminAuth):
   private type Failure = (StatusCode, ApiError)
 
   private val base = endpoint.in("api" / "v1")
@@ -59,13 +68,12 @@ final class Api(service: MapService, auth: AdminAuth) {
     .in(header[Option[String]]("Authorization")).out(jsonBody[RoomDto])
     .description("Вернуть помещение в черновики")
 
-  private def toFailure(error: MapError): Failure = error match {
+  private def toFailure(error: MapError): Failure = error match
     case MapError.NotFound => (StatusCode.NotFound, ApiError("not_found", error.message))
     case _: MapError.InvalidInput => (StatusCode.BadRequest, ApiError("invalid_input", error.message))
     case _: MapError.Conflict => (StatusCode.Conflict, ApiError("conflict", error.message))
     case MapError.Unauthorized => (StatusCode.Unauthorized, ApiError("unauthorized", error.message))
     case MapError.Internal => (StatusCode.InternalServerError, ApiError("internal", error.message))
-  }
 
   private def result[A](effect: IO[MapError, A]): IO[Failure, A] = effect.mapError(toFailure)
 
@@ -81,26 +89,27 @@ final class Api(service: MapService, auth: AdminAuth) {
       result(service.publicRoom(roomId)).map(_.transformInto[RoomDto])),
     loginEndpoint.zServerLogic(input =>
       result(ZIO.fromEither(auth.login(input.username, input.password)))
-        .map { case (token, expiresAt) => TokenDto(token, expiresAt) }),
-    adminRoomsEndpoint.zServerLogic { case (floorId, authorization) =>
-      result(authorize(authorization) *> service.adminRooms(floorId))
-        .map(_.map(_.transformInto[RoomDto]))
-    },
-    createEndpoint.zServerLogic { case (authorization, input) =>
-      result(authorize(authorization) *> service.create(input.transformInto[RoomDraft]))
-        .map(_.transformInto[RoomDto])
-    },
-    updateEndpoint.zServerLogic { case (roomId, authorization, input, version) =>
-      result(authorize(authorization) *> service.update(roomId, version, input.transformInto[RoomDraft]))
-        .map(_.transformInto[RoomDto])
-    },
-    publishEndpoint.zServerLogic { case (roomId, authorization) =>
-      result(authorize(authorization) *> service.publish(roomId, published = true))
-        .map(_.transformInto[RoomDto])
-    },
-    unpublishEndpoint.zServerLogic { case (roomId, authorization) =>
-      result(authorize(authorization) *> service.publish(roomId, published = false))
-        .map(_.transformInto[RoomDto])
-    }
+        .map:
+          case (token, expiresAt) => TokenDto(token, expiresAt)
+    ),
+    adminRoomsEndpoint.zServerLogic:
+      case (floorId, authorization) =>
+        result(authorize(authorization) *> service.adminRooms(floorId))
+          .map(_.map(_.transformInto[RoomDto])),
+    createEndpoint.zServerLogic:
+      case (authorization, input) =>
+        result(authorize(authorization) *> service.create(input.transformInto[RoomDraft]))
+          .map(_.transformInto[RoomDto]),
+    updateEndpoint.zServerLogic:
+      case (roomId, authorization, input, version) =>
+        result(authorize(authorization) *> service.update(roomId, version, input.transformInto[RoomDraft]))
+          .map(_.transformInto[RoomDto]),
+    publishEndpoint.zServerLogic:
+      case (roomId, authorization) =>
+        result(authorize(authorization) *> service.publish(roomId, published = true))
+          .map(_.transformInto[RoomDto]),
+    unpublishEndpoint.zServerLogic:
+      case (roomId, authorization) =>
+        result(authorize(authorization) *> service.publish(roomId, published = false))
+          .map(_.transformInto[RoomDto])
   )
-}

@@ -109,13 +109,15 @@ final class PostgresMapRepository(xa: Transactor[Task]) extends MapRepository:
                 else false.pure[ConnectionIO]
               updated <-
                 if overlap then
-                  (Left(MapError.Conflict("Помещение пересекается с опубликованным помещением")):
-                    Either[MapError, Room]).pure[ConnectionIO]
+                  val conflict: Either[MapError, Room] =
+                    Left(MapError.Conflict("Помещение пересекается с опубликованным помещением"))
+                  conflict.pure[ConnectionIO]
                 else
                   val status = if published then "published" else "draft"
+                  val result: Either[MapError, Room] =
+                    Right(room.copy(status = status, version = room.version + 1))
                   sql"UPDATE rooms SET status = $status, version = version + 1 WHERE id = $id"
-                    .update.run.as(Right(room.copy(status = status, version = room.version + 1)):
-                      Either[MapError, Room])
+                    .update.run.as(result)
             yield updated
       yield result
 

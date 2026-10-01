@@ -33,7 +33,9 @@ final class AdminAuth(username: String, password: String, signingKey: String):
     if !header.startsWith("Bearer ") || parts.length != 3 then
       Left(MapError.Unauthorized)
     else
-      val payload = s"${parts(0)}.${parts(1)}"
+      val expiry = parts(0)
+      val nonce = parts(1)
+      val payload = s"$expiry.$nonce"
       val validSignature =
         try equalBytes(Base64.getUrlDecoder.decode(parts(2)), sign(payload))
         catch
